@@ -1,6 +1,9 @@
 
 [TOC]
 
+### purpose
+* 解决只能通过ftp上传资源，方便服务器逻辑动态生成资源并同步到ftp
+
 ### version
 ```
 v0.0.1
@@ -40,9 +43,18 @@ ftpsync {local file} {remote file}
 ![](screenshot/ex_2.png)
 
 
+### example
+```
+<?php
+
+$redis_handle = new Redis();
+$redis_handle->connect('127.0.0.1', 8399, 30);
+$redis_handle->rawCommand('ftpsync', '/data/nice.gif', '/web/images/hello.gif');
+```
+
 ### deps
 * https://github.com/jonnywang/go-kits/redis
 * https://github.com/jlaffaye/ftp
 
 ### faq
- * qq群 233415606
+* qq群 233415606
