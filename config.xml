@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<config>
+    <listen>0.0.0.0:8399</listen>
+    <ftp>
+        <address>192.168.1.155:21</address>
+        <user>anonymous</user>
+        <password>anonymous</password>
+    </ftp>
+</config>
