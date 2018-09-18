@@ -33,7 +33,6 @@ delete {remote file}
 <config>
     <listen>0.0.0.0:8399</listen>
     <ftp>
-        <excludes></excludes>
         <address>192.168.1.155:21</address>
         <user>anonymous</user>
         <password>anonymous</password>

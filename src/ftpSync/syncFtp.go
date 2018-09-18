@@ -5,7 +5,6 @@ import (
 	"github.com/jlaffaye/ftp"
 	"os"
 	"path"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -31,7 +30,6 @@ type SyncFtp struct {
 	syncStopChannel chan bool
 	allRemoteFolder map[string]bool
 	syncFtpServer   *ftp.ServerConn
-	excludeFolders []string
 }
 
 func (obj *SyncFtp) connectFtpServer() bool {
@@ -73,11 +71,6 @@ func (obj *SyncFtp) listFtpServerFolder(p string) {
 		}
 
 		tp := path.Join(p, e.Name)
-
-		if InStringArray(tp, obj.excludeFolders) {
-			continue
-		}
-
 		obj.allRemoteFolder[tp] = true
 		obj.listFtpServerFolder(tp)
 		Logger.Printf("found ftp server folder:%s", tp)
@@ -86,12 +79,6 @@ func (obj *SyncFtp) listFtpServerFolder(p string) {
 
 func (obj *SyncFtp) Init() {
 	obj.syncFtpServer = nil
-
-	if len(GConfig.ExcludeFolders) > 0 {
-		obj.excludeFolders = strings.Split(GConfig.ExcludeFolders, ",")
-	} else {
-		obj.excludeFolders = make([]string, 0)
-	}
 
 	if obj.connectFtpServer() == false {
 		return
@@ -155,12 +142,11 @@ func (obj *SyncFtp) Refresh() {
 		return
 	}
 
-	Logger.Printf("starting refresh ftp server")
-
 	obj.allRemoteFolder = make(map[string]bool, 0)
-	obj.listFtpServerFolder("/")
 
-	Logger.Printf("refresh ftp server folder success %v", reflect.ValueOf(obj.allRemoteFolder).MapKeys())
+	//Logger.Printf("starting refresh ftp server")
+	//obj.listFtpServerFolder("/")
+	//Logger.Printf("refresh ftp server folder success %v", reflect.ValueOf(obj.allRemoteFolder).MapKeys())
 }
 
 func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
@@ -196,8 +182,7 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
 					obj.allRemoteFolder[tempRemoteFileFolder] = true
 					Logger.Printf("mkdir %s success", tempRemoteFileFolder)
 				} else {
-					Logger.Printf("mkdir %s failed", tempRemoteFileFolder)
-					break
+					Logger.Printf("mkdir %s failed %v", tempRemoteFileFolder, err)
 				}
 			}
 		}
