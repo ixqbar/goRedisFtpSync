@@ -246,8 +246,12 @@ func (obj *SyncFtp) ListFiles(remoteFolder string) ([]string, error) {
 
 	folderFiles := make([]string, 0)
 	for _, e := range fileEntryList {
-		if InStringArray(e.Name, []string{".", ".."}) == false{
-			folderFiles = append(folderFiles, path.Join(remoteFolder, e.Name))
+		if InStringArray(e.Name, []string{".", ".."}) == false {
+			tp := path.Join(remoteFolder, e.Name)
+			if e.Type == ftp.EntryTypeFolder {
+				obj.allRemoteFolder[tp] = true
+			}
+			folderFiles = append(folderFiles, tp)
 		}
 	}
 
