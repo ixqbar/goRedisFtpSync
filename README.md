@@ -23,7 +23,8 @@ OK
 ```
 ping {message}
 ftpsync {local file} {remote file}
-listfiles {remote folder}
+files {remote folder}
+delete {remote file}
 ```
 
 ### config
@@ -32,6 +33,7 @@ listfiles {remote folder}
 <config>
     <listen>0.0.0.0:8399</listen>
     <ftp>
+        <excludes></excludes>
         <address>192.168.1.155:21</address>
         <user>anonymous</user>
         <password>anonymous</password>
@@ -45,7 +47,6 @@ listfiles {remote folder}
 ![](screenshot/ex_3.png)
 ![](screenshot/ex_4.png)
 
-
 ### example
 ```
 <?php
@@ -55,7 +56,9 @@ $redis_handle->connect('127.0.0.1', 8399, 30);
 //同步上传
 $redis_handle->rawCommand('ftpsync', '/data/nice.gif', '/web/images/hello.gif');
 //拉取列表
-$result = $redis_handle->rawCommand('listfiles', '/web');
+$result = $redis_handle->rawCommand('files', '/web');
+//删除
+$redis_handle->rawCommand('delete', '/web/images/hello.gif');
 ```
 
 ### deps

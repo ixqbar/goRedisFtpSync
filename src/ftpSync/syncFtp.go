@@ -31,22 +31,26 @@ type SyncFtp struct {
 	syncStopChannel chan bool
 	allRemoteFolder map[string]bool
 	syncFtpServer   *ftp.ServerConn
+	excludeFolders []string
 }
 
 func (obj *SyncFtp) connectFtpServer() bool {
 	fs, err := ftp.DialTimeout(GConfig.FtpServerAddress, time.Second*30)
 	if err != nil {
-		Logger.Println(err)
+		Logger.Printf("ftp server %s connect failed %v", GConfig.FtpServerAddress, err)
 		return false
 	}
 
 	err = fs.Login(GConfig.FtpServerUser, GConfig.FtpServerPassword)
 	if err != nil {
+		Logger.Printf("ftp server %s login failed %v", GConfig.FtpServerAddress, err)
 		Logger.Println(err)
 		return false
 	}
 
 	obj.syncFtpServer = fs
+
+	Logger.Printf("ftp server %s connect success", GConfig.FtpServerAddress)
 
 	return true
 }
@@ -60,17 +64,34 @@ func (obj *SyncFtp) listFtpServerFolder(p string) {
 	}
 
 	for _, e := range fileEntryList {
-		if e.Type == ftp.EntryTypeFolder {
-			tp := path.Join(p, e.Name)
-			obj.allRemoteFolder[tp] = true
-			obj.listFtpServerFolder(tp)
-			Logger.Printf("found folder:%s", tp)
+		if e.Type != ftp.EntryTypeFolder {
+			continue
 		}
+
+		if InStringArray(e.Name, []string{".", ".."}) {
+			continue
+		}
+
+		tp := path.Join(p, e.Name)
+
+		if InStringArray(tp, obj.excludeFolders) {
+			continue
+		}
+
+		obj.allRemoteFolder[tp] = true
+		obj.listFtpServerFolder(tp)
+		Logger.Printf("found ftp server folder:%s", tp)
 	}
 }
 
 func (obj *SyncFtp) Init() {
 	obj.syncFtpServer = nil
+
+	if len(GConfig.ExcludeFolders) > 0 {
+		obj.excludeFolders = strings.Split(GConfig.ExcludeFolders, ",")
+	} else {
+		obj.excludeFolders = make([]string, 0)
+	}
 
 	if obj.connectFtpServer() == false {
 		return
@@ -134,10 +155,12 @@ func (obj *SyncFtp) Refresh() {
 		return
 	}
 
+	Logger.Printf("starting refresh ftp server")
+
 	obj.allRemoteFolder = make(map[string]bool, 0)
 	obj.listFtpServerFolder("/")
 
-	Logger.Printf("refresh remote folder %v", reflect.ValueOf(obj.allRemoteFolder).MapKeys())
+	Logger.Printf("refresh ftp server folder success %v", reflect.ValueOf(obj.allRemoteFolder).MapKeys())
 }
 
 func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
@@ -238,10 +261,31 @@ func (obj *SyncFtp) ListFiles(remoteFolder string) ([]string, error) {
 
 	folderFiles := make([]string, 0)
 	for _, e := range fileEntryList {
-		folderFiles = append(folderFiles, path.Join(remoteFolder, e.Name))
+		if InStringArray(e.Name, []string{".", ".."}) == false{
+			folderFiles = append(folderFiles, path.Join(remoteFolder, e.Name))
+		}
 	}
 
 	return folderFiles, nil
+}
+
+func (obj *SyncFtp) DeleteFile(remoteFile string) bool {
+	obj.Lock()
+	defer obj.Unlock()
+
+	if obj.syncFtpServer == nil && obj.connectFtpServer() == false {
+		return false
+	}
+
+	err := obj.syncFtpServer.Delete(remoteFile)
+	if err != nil {
+		Logger.Printf("delete ftp server file %s failed %v", remoteFile, err)
+		return false
+	}
+
+	Logger.Printf("delete ftp server file %s success", remoteFile)
+
+	return true
 }
 
 func (obj *SyncFtp) Stop() {

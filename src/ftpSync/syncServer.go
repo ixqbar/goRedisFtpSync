@@ -49,12 +49,22 @@ func (obj *ftpSyncRedisHandler) FtpSync(localFile, remoteFile string) error {
 	return errors.New("sync fail")
 }
 
-func (obj *ftpSyncRedisHandler) ListFiles(remoteFolder string) ([]string, error) {
+func (obj *ftpSyncRedisHandler) Files(remoteFolder string) ([]string, error) {
 	if len(remoteFolder) == 0 || strings.HasPrefix(remoteFolder, "/") == false {
 		return nil, errors.New("error params")
 	}
 
 	return GSyncFtp.ListFiles(remoteFolder)
+}
+
+func (obj *ftpSyncRedisHandler) Delete(remoteFile string) error {
+	if len(remoteFile) == 0 || strings.HasPrefix(remoteFile, "/") == false || strings.HasSuffix(remoteFile, "/") == true {
+		return errors.New("error params")
+	}
+
+	go GSyncFtp.DeleteFile(remoteFile)
+
+	return nil
 }
 
 func Run() {

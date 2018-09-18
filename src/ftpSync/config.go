@@ -9,6 +9,7 @@ import (
 
 type TConfig struct {
 	ListenServer      string `xml:"listen"`
+	ExcludeFolders    string `xml:"ftp>excludes"`
 	FtpServerAddress  string `xml:"ftp>address"`
 	FtpServerUser     string `xml:"ftp>user"`
 	FtpServerPassword string `xml:"ftp>password"`
