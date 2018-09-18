@@ -56,7 +56,7 @@ func (obj *SyncFtp) connectFtpServer() bool {
 
 func (obj *SyncFtp) Init() {
 	obj.syncFtpServer = nil
-	obj.allRemoteFolder = nil
+	obj.allRemoteFolder = make(map[string]bool, 0)
 
 	if obj.connectFtpServer() == false {
 		return
@@ -127,10 +127,6 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
 	obj.Lock()
 	defer obj.Unlock()
 
-	if obj.allRemoteFolder == nil || numberTimes > 1 {
-		obj.allRemoteFolder = make(map[string]bool, 0)
-	}
-
 	oldRemoteFile := remoteFile
 
 	if strings.HasPrefix(remoteFile, "/") {
@@ -149,12 +145,12 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
 	position := strings.LastIndex(remoteFile, "/")
 	remoteFileFolder := remoteFile[:position]
 
-	if _, ok := obj.allRemoteFolder[remoteFileFolder]; !ok {
+	if _, ok := obj.allRemoteFolder[remoteFileFolder]; ok == false || numberTimes > 1 {
 		remoteFileFolders := strings.Split(remoteFileFolder, "/")
 		tempRemoteFileFolder := "/"
 		for _, f := range remoteFileFolders {
 			tempRemoteFileFolder = path.Join(tempRemoteFileFolder, f)
-			if _, ok := obj.allRemoteFolder[tempRemoteFileFolder]; !ok {
+			if _, ok := obj.allRemoteFolder[tempRemoteFileFolder]; ok == false || numberTimes > 1 {
 				err := obj.syncFtpServer.MakeDir(tempRemoteFileFolder)
 				if err == nil {
 					obj.allRemoteFolder[tempRemoteFileFolder] = true
