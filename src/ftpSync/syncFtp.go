@@ -1,6 +1,7 @@
 package ftpSync
 
 import (
+	"errors"
 	"github.com/jlaffaye/ftp"
 	"os"
 	"path"
@@ -11,15 +12,15 @@ import (
 )
 
 type SyncFileInfo struct {
-	LocalFile  string
-	RemoteFile string
+	LocalFile   string
+	RemoteFile  string
 	NumberTimes int
 }
 
 func NewSyncFileInfo(localFile, remoteFile string, numberTimes int) *SyncFileInfo {
 	return &SyncFileInfo{
-		LocalFile:  localFile,
-		RemoteFile: remoteFile,
+		LocalFile:   localFile,
+		RemoteFile:  remoteFile,
 		NumberTimes: numberTimes,
 	}
 }
@@ -195,7 +196,7 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
 	err = obj.syncFtpServer.Stor(remoteFile, reader)
 	if err != nil {
 		Logger.Printf("sync %s failed %v", localFile, err)
-		obj.Sync(localFile, remoteFile, numberTimes + 1)
+		obj.Sync(localFile, remoteFile, numberTimes+1)
 		return
 	}
 
@@ -214,6 +215,33 @@ func (obj *SyncFtp) Sync(localFile, remoteFile string, numberTimes int) bool {
 	}
 
 	return false
+}
+
+func (obj *SyncFtp) ListFiles(remoteFolder string) ([]string, error) {
+	obj.Lock()
+	defer obj.Unlock()
+
+	if obj.syncFtpServer == nil && obj.connectFtpServer() == false {
+		return nil, errors.New("can't connected ftp server")
+	}
+
+	if strings.HasSuffix(remoteFolder, "/") {
+		remoteFolder = remoteFolder[:len(remoteFolder)-1]
+	}
+
+	fileEntryList, err := obj.syncFtpServer.List(remoteFolder)
+	if err != nil {
+		obj.syncFtpServer = nil
+		Logger.Print(err)
+		return nil, err
+	}
+
+	folderFiles := make([]string, 0)
+	for _, e := range fileEntryList {
+		folderFiles = append(folderFiles, path.Join(remoteFolder, e.Name))
+	}
+
+	return folderFiles, nil
 }
 
 func (obj *SyncFtp) Stop() {

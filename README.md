@@ -6,7 +6,7 @@
 
 ### version
 ```
-v0.0.1
+v0.0.2
 ```
 
 ### usage
@@ -23,6 +23,7 @@ OK
 ```
 ping {message}
 ftpsync {local file} {remote file}
+listfiles {remote folder}
 ```
 
 ### config
@@ -41,6 +42,8 @@ ftpsync {local file} {remote file}
 ### screenshot
 ![](screenshot/ex_1.png)
 ![](screenshot/ex_2.png)
+![](screenshot/ex_3.png)
+![](screenshot/ex_4.png)
 
 
 ### example

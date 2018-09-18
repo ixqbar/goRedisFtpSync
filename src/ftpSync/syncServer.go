@@ -49,6 +49,14 @@ func (obj *ftpSyncRedisHandler) FtpSync(localFile, remoteFile string) error {
 	return errors.New("sync fail")
 }
 
+func (obj *ftpSyncRedisHandler) ListFiles(remoteFolder string) ([]string, error) {
+	if len(remoteFolder) == 0 || strings.HasPrefix(remoteFolder, "/") == false {
+		return nil, errors.New("error params")
+	}
+
+	return GSyncFtp.ListFiles(remoteFolder)
+}
+
 func Run() {
 	wordsFilterHandler := &ftpSyncRedisHandler{}
 
