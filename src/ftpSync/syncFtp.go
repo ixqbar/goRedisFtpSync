@@ -5,6 +5,7 @@ import (
 	"github.com/jlaffaye/ftp"
 	"os"
 	"path"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -53,32 +54,9 @@ func (obj *SyncFtp) connectFtpServer() bool {
 	return true
 }
 
-func (obj *SyncFtp) listFtpServerFolder(p string) {
-	fileEntryList, err := obj.syncFtpServer.List(p)
-	if err != nil {
-		obj.syncFtpServer = nil
-		Logger.Print(err)
-		return
-	}
-
-	for _, e := range fileEntryList {
-		if e.Type != ftp.EntryTypeFolder {
-			continue
-		}
-
-		if InStringArray(e.Name, []string{".", ".."}) {
-			continue
-		}
-
-		tp := path.Join(p, e.Name)
-		obj.allRemoteFolder[tp] = true
-		obj.listFtpServerFolder(tp)
-		Logger.Printf("found ftp server folder:%s", tp)
-	}
-}
-
 func (obj *SyncFtp) Init() {
 	obj.syncFtpServer = nil
+	obj.allRemoteFolder = nil
 
 	if obj.connectFtpServer() == false {
 		return
@@ -142,16 +120,16 @@ func (obj *SyncFtp) Refresh() {
 		return
 	}
 
-	obj.allRemoteFolder = make(map[string]bool, 0)
-
-	//Logger.Printf("starting refresh ftp server")
-	//obj.listFtpServerFolder("/")
-	//Logger.Printf("refresh ftp server folder success %v", reflect.ValueOf(obj.allRemoteFolder).MapKeys())
+	Logger.Printf("current load ftp server folders %v", reflect.ValueOf(obj.allRemoteFolder).MapKeys())
 }
 
 func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
 	obj.Lock()
 	defer obj.Unlock()
+
+	if obj.allRemoteFolder == nil || numberTimes > 1 {
+		obj.allRemoteFolder = make(map[string]bool, 0)
+	}
 
 	oldRemoteFile := remoteFile
 
