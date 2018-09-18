@@ -52,7 +52,10 @@ listfiles {remote folder}
 
 $redis_handle = new Redis();
 $redis_handle->connect('127.0.0.1', 8399, 30);
+//同步上传
 $redis_handle->rawCommand('ftpsync', '/data/nice.gif', '/web/images/hello.gif');
+//拉取列表
+$result = $redis_handle->rawCommand('listfiles', '/web');
 ```
 
 ### deps
