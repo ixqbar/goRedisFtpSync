@@ -143,20 +143,21 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
 	}
 
 	position := strings.LastIndex(remoteFile, "/")
-	remoteFileFolder := remoteFile[:position]
-
-	if _, ok := obj.allRemoteFolder[remoteFileFolder]; ok == false || numberTimes > 1 {
-		remoteFileFolders := strings.Split(remoteFileFolder, "/")
-		tempRemoteFileFolder := "/"
-		for _, f := range remoteFileFolders {
-			tempRemoteFileFolder = path.Join(tempRemoteFileFolder, f)
-			if _, ok := obj.allRemoteFolder[tempRemoteFileFolder]; ok == false || numberTimes > 1 {
-				err := obj.syncFtpServer.MakeDir(tempRemoteFileFolder)
-				if err == nil {
-					obj.allRemoteFolder[tempRemoteFileFolder] = true
-					Logger.Printf("mkdir %s success", tempRemoteFileFolder)
-				} else {
-					Logger.Printf("mkdir %s failed %v", tempRemoteFileFolder, err)
+	if position >= 0 {
+		remoteFileFolder := remoteFile[:position]
+		if _, ok := obj.allRemoteFolder[remoteFileFolder]; ok == false || numberTimes > 1 {
+			remoteFileFolders := strings.Split(remoteFileFolder, "/")
+			tempRemoteFileFolder := "/"
+			for _, f := range remoteFileFolders {
+				tempRemoteFileFolder = path.Join(tempRemoteFileFolder, f)
+				if _, ok := obj.allRemoteFolder[tempRemoteFileFolder]; ok == false || numberTimes > 1 {
+					err := obj.syncFtpServer.MakeDir(tempRemoteFileFolder)
+					if err == nil {
+						obj.allRemoteFolder[tempRemoteFileFolder] = true
+						Logger.Printf("mkdir %s success", tempRemoteFileFolder)
+					} else {
+						Logger.Printf("mkdir %s failed %v", tempRemoteFileFolder, err)
+					}
 				}
 			}
 		}
@@ -207,29 +208,45 @@ func (obj *SyncFtp) ListFiles(remoteFolder string) ([]string, error) {
 		return nil, errors.New("can't connected ftp server")
 	}
 
-	if strings.HasSuffix(remoteFolder, "/") {
+	if len(remoteFolder) > 1 && strings.HasSuffix(remoteFolder, "/") {
 		remoteFolder = remoteFolder[:len(remoteFolder)-1]
 	}
 
-	fileEntryList, err := obj.syncFtpServer.List(remoteFolder)
+	return obj.listFtpServerFolder(remoteFolder), nil
+}
+
+func (obj *SyncFtp) listFtpServerFolder(p string) []string {
+	fileEntryList, err := obj.syncFtpServer.List(p)
 	if err != nil {
 		obj.syncFtpServer = nil
 		Logger.Print(err)
-		return nil, err
+		return nil
 	}
 
 	folderFiles := make([]string, 0)
+
 	for _, e := range fileEntryList {
-		if InStringArray(e.Name, []string{".", ".."}) == false {
-			tp := path.Join(remoteFolder, e.Name)
-			if e.Type == ftp.EntryTypeFolder {
-				obj.allRemoteFolder[tp] = true
+		if e.Type == ftp.EntryTypeLink {
+			continue
+		}
+
+		tp := path.Join(p, e.Name)
+
+		if e.Type == ftp.EntryTypeFolder {
+			obj.allRemoteFolder[tp] = true
+		}
+
+		folderFiles = append(folderFiles, tp)
+
+		if e.Type == ftp.EntryTypeFolder {
+			tf := obj.listFtpServerFolder(tp)
+			if tf != nil && len(tf) > 0 {
+				folderFiles = append(folderFiles, tf...)
 			}
-			folderFiles = append(folderFiles, tp)
 		}
 	}
 
-	return folderFiles, nil
+	return folderFiles
 }
 
 func (obj *SyncFtp) DeleteFile(remoteFile string) bool {
