@@ -200,7 +200,7 @@ func (obj *SyncFtp) Sync(localFile, remoteFile string, numberTimes int) bool {
 	return false
 }
 
-func (obj *SyncFtp) ListFiles(remoteFolder string) ([]string, error) {
+func (obj *SyncFtp) ListFiles(remoteFolder string, recursion int) ([]string, error) {
 	obj.Lock()
 	defer obj.Unlock()
 
@@ -212,10 +212,10 @@ func (obj *SyncFtp) ListFiles(remoteFolder string) ([]string, error) {
 		remoteFolder = remoteFolder[:len(remoteFolder)-1]
 	}
 
-	return obj.listFtpServerFolder(remoteFolder), nil
+	return obj.listFtpServerFolder(remoteFolder, recursion), nil
 }
 
-func (obj *SyncFtp) listFtpServerFolder(p string) []string {
+func (obj *SyncFtp) listFtpServerFolder(p string, recursion int) []string {
 	fileEntryList, err := obj.syncFtpServer.List(p)
 	if err != nil {
 		obj.syncFtpServer = nil
@@ -226,7 +226,7 @@ func (obj *SyncFtp) listFtpServerFolder(p string) []string {
 	folderFiles := make([]string, 0)
 
 	for _, e := range fileEntryList {
-		if e.Type == ftp.EntryTypeLink {
+		if e.Type == ftp.EntryTypeLink || InStringArray(e.Name, []string{".", ".."}){
 			continue
 		}
 
@@ -238,8 +238,8 @@ func (obj *SyncFtp) listFtpServerFolder(p string) []string {
 
 		folderFiles = append(folderFiles, tp)
 
-		if e.Type == ftp.EntryTypeFolder {
-			tf := obj.listFtpServerFolder(tp)
+		if recursion == 1 && e.Type == ftp.EntryTypeFolder {
+			tf := obj.listFtpServerFolder(tp, recursion)
 			if tf != nil && len(tf) > 0 {
 				folderFiles = append(folderFiles, tf...)
 			}
