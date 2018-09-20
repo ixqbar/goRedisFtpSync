@@ -67,6 +67,18 @@ func (obj *ftpSyncRedisHandler) Delete(remoteFile string) error {
 	return nil
 }
 
+func (obj *ftpSyncRedisHandler) Exists(remoteFile string) (int, error) {
+	if len(remoteFile) == 0 || strings.HasPrefix(remoteFile, "/") == false || strings.HasSuffix(remoteFile, "/") == true {
+		return 0, errors.New("error params")
+	}
+
+	if GSyncFtp.ExistsFile(remoteFile) {
+		return 1, nil
+	}
+
+	return 0, nil
+}
+
 func Run() {
 	wordsFilterHandler := &ftpSyncRedisHandler{}
 

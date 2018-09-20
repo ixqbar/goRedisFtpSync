@@ -6,7 +6,7 @@
 
 ### version
 ```
-v0.0.2
+v0.0.3
 ```
 
 ### usage
@@ -24,6 +24,7 @@ OK
 ping {message}
 ftpsync {local file} {remote file}
 files {remote folder}
+exists {remote file}
 delete {remote file}
 ```
 

@@ -268,6 +268,23 @@ func (obj *SyncFtp) DeleteFile(remoteFile string) bool {
 	return true
 }
 
+func (obj *SyncFtp) ExistsFile(remoteFile string) bool {
+	obj.Lock()
+	defer obj.Unlock()
+
+	if obj.syncFtpServer == nil && obj.connectFtpServer() == false {
+		return false
+	}
+
+	_, err := obj.syncFtpServer.FileSize(remoteFile)
+	if err != nil {
+		Logger.Printf("check ftp server file %s exists failed %v", remoteFile, err)
+		return false
+	}
+
+	return true
+}
+
 func (obj *SyncFtp) Stop() {
 	if obj.syncFtpServer != nil {
 		obj.syncStopChannel <- true
