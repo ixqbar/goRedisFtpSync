@@ -57,14 +57,20 @@ func (obj *ftpSyncRedisHandler) Files(remoteFolder string, recursionShow int) ([
 	return GSyncFtp.ListFiles(remoteFolder, recursionShow)
 }
 
-func (obj *ftpSyncRedisHandler) Delete(remoteFile string) error {
+func (obj *ftpSyncRedisHandler) Delete(remoteFile string, doAsync int) (int, error) {
 	if len(remoteFile) == 0 || strings.HasPrefix(remoteFile, "/") == false || strings.HasSuffix(remoteFile, "/") == true {
-		return errors.New("error params")
+		return 0, errors.New("error params")
 	}
 
-	go GSyncFtp.DeleteFile(remoteFile)
+	if doAsync == 1 {
+		go GSyncFtp.DeleteFile(remoteFile)
+	} else {
+		if GSyncFtp.DeleteFile(remoteFile) == false {
+			return 0, nil
+		}
+	}
 
-	return nil
+	return 1, nil
 }
 
 func (obj *ftpSyncRedisHandler) Exists(remoteFile string) (int, error) {

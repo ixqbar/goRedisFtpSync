@@ -33,27 +33,6 @@ type SyncFtp struct {
 	syncFtpServer   *ftp.ServerConn
 }
 
-func (obj *SyncFtp) connectFtpServer() bool {
-	fs, err := ftp.DialTimeout(GConfig.FtpServerAddress, time.Second*30)
-	if err != nil {
-		Logger.Printf("ftp server %s connect failed %v", GConfig.FtpServerAddress, err)
-		return false
-	}
-
-	err = fs.Login(GConfig.FtpServerUser, GConfig.FtpServerPassword)
-	if err != nil {
-		Logger.Printf("ftp server %s login failed %v", GConfig.FtpServerAddress, err)
-		Logger.Println(err)
-		return false
-	}
-
-	obj.syncFtpServer = fs
-
-	Logger.Printf("ftp server %s connect success", GConfig.FtpServerAddress)
-
-	return true
-}
-
 func (obj *SyncFtp) Init() {
 	obj.syncFtpServer = nil
 	obj.allRemoteFolder = make(map[string]bool, 0)
@@ -101,21 +80,42 @@ func (obj *SyncFtp) Init() {
 	}()
 }
 
+func (obj *SyncFtp) ftpServerStateIsActive() bool {
+	if obj.syncFtpServer != nil {
+		err := obj.syncFtpServer.NoOp()
+		if err == nil {
+			return true
+		} else {
+			obj.syncFtpServer = nil
+			Logger.Print(err)
+		}
+	}
+
+	fs, err := ftp.DialTimeout(GConfig.FtpServerAddress, time.Second*10)
+	if err != nil {
+		Logger.Printf("ftp server %s connect failed %v", GConfig.FtpServerAddress, err)
+		return false
+	}
+
+	err = fs.Login(GConfig.FtpServerUser, GConfig.FtpServerPassword)
+	if err != nil {
+		Logger.Printf("ftp server %s login failed %v", GConfig.FtpServerAddress, err)
+		Logger.Println(err)
+		return false
+	}
+
+	obj.syncFtpServer = fs
+
+	Logger.Printf("ftp server %s connect success", GConfig.FtpServerAddress)
+
+	return true
+}
+
 func (obj *SyncFtp) Refresh() {
 	obj.Lock()
 	defer obj.Unlock()
 
-	if obj.syncFtpServer == nil && obj.connectFtpServer() == false {
-		return
-	}
-
-	err := obj.syncFtpServer.NoOp()
-	if err != nil {
-		obj.syncFtpServer = nil
-		Logger.Print(err)
-		return
-	}
-
+	obj.ftpServerStateIsActive()
 	Logger.Printf("current load ftp server folders %v", reflect.ValueOf(obj.allRemoteFolder).MapKeys())
 }
 
@@ -159,7 +159,7 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
 		}
 	}
 
-	if obj.syncFtpServer == nil && obj.connectFtpServer() == false {
+	if obj.ftpServerStateIsActive() == false {
 		Logger.Printf("sync %s failed can't connected ftp server", localFile)
 		obj.Sync(localFile, remoteFile, numberTimes+1)
 		return
@@ -200,7 +200,7 @@ func (obj *SyncFtp) ListFiles(remoteFolder string, recursion int) ([]string, err
 	obj.Lock()
 	defer obj.Unlock()
 
-	if obj.syncFtpServer == nil && obj.connectFtpServer() == false {
+	if obj.ftpServerStateIsActive() == false {
 		return nil, errors.New("can't connected ftp server")
 	}
 
@@ -249,7 +249,7 @@ func (obj *SyncFtp) DeleteFile(remoteFile string) bool {
 	obj.Lock()
 	defer obj.Unlock()
 
-	if obj.syncFtpServer == nil && obj.connectFtpServer() == false {
+	if obj.ftpServerStateIsActive() == false {
 		return false
 	}
 
@@ -268,7 +268,7 @@ func (obj *SyncFtp) ExistsFile(remoteFile string) bool {
 	obj.Lock()
 	defer obj.Unlock()
 
-	if obj.syncFtpServer == nil && obj.connectFtpServer() == false {
+	if obj.ftpServerStateIsActive() == false {
 		return false
 	}
 
