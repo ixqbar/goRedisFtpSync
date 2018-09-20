@@ -80,15 +80,15 @@ func (obj *ftpSyncRedisHandler) Exists(remoteFile string) (int, error) {
 }
 
 func Run() {
-	wordsFilterHandler := &ftpSyncRedisHandler{}
+	ftpSyncHandler := &ftpSyncRedisHandler{}
 
-	err := wordsFilterHandler.Init()
+	err := ftpSyncHandler.Init()
 	if err != nil {
 		Logger.Print(err)
 		return
 	}
 
-	wordsFilterServer, err := redis.NewServer(GConfig.ListenServer, wordsFilterHandler)
+	ftpSyncServer, err := redis.NewServer(GConfig.ListenServer, ftpSyncHandler)
 	if err != nil {
 		Logger.Print(err)
 		return
@@ -100,12 +100,13 @@ func Run() {
 
 	go func() {
 		<-stopSignal
-		wordsFilterServer.Stop(10)
+		Logger.Print("catch exit signal")
+		ftpSyncServer.Stop(10)
 		GSyncFtp.Stop()
 		serverStop <- true
 	}()
 
-	err = wordsFilterServer.Start()
+	err = ftpSyncServer.Start()
 	if err != nil {
 		Logger.Print(err)
 		stopSignal <- syscall.SIGTERM

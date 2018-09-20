@@ -57,15 +57,10 @@ func (obj *SyncFtp) connectFtpServer() bool {
 func (obj *SyncFtp) Init() {
 	obj.syncFtpServer = nil
 	obj.allRemoteFolder = make(map[string]bool, 0)
-
-	if obj.connectFtpServer() == false {
-		return
-	}
-
-	obj.Refresh()
-
 	obj.syncFileChannel = make(chan *SyncFileInfo, 10)
 	obj.syncStopChannel = make(chan bool, 0)
+
+	obj.Refresh()
 
 	go func() {
 		checkInterval := time.NewTicker(time.Second * time.Duration(10))
@@ -89,6 +84,7 @@ func (obj *SyncFtp) Init() {
 			case syncFile := <-obj.syncFileChannel:
 				obj.Put(syncFile.LocalFile, syncFile.RemoteFile, syncFile.NumberTimes)
 			case <-obj.syncStopChannel:
+				Logger.Print("syncFtp catch stop signal")
 				break E
 			}
 		}
@@ -226,7 +222,7 @@ func (obj *SyncFtp) listFtpServerFolder(p string, recursion int) []string {
 	folderFiles := make([]string, 0)
 
 	for _, e := range fileEntryList {
-		if e.Type == ftp.EntryTypeLink || InStringArray(e.Name, []string{".", ".."}){
+		if e.Type == ftp.EntryTypeLink || InStringArray(e.Name, []string{".", ".."}) {
 			continue
 		}
 
@@ -286,9 +282,7 @@ func (obj *SyncFtp) ExistsFile(remoteFile string) bool {
 }
 
 func (obj *SyncFtp) Stop() {
-	if obj.syncFtpServer != nil {
-		obj.syncStopChannel <- true
-	}
+	obj.syncStopChannel <- true
 }
 
 var GSyncFtp = &SyncFtp{}
