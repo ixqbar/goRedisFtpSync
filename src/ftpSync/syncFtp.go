@@ -119,7 +119,7 @@ func (obj *SyncFtp) Refresh() {
 	Logger.Printf("current load ftp server folders %v", reflect.ValueOf(obj.allRemoteFolder).MapKeys())
 }
 
-func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
+func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 	obj.Lock()
 	defer obj.Unlock()
 
@@ -135,7 +135,7 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
 
 	if len(remoteFile) == 0 {
 		Logger.Printf("sync remote file %s failed", oldRemoteFile)
-		return
+		return false
 	}
 
 	position := strings.LastIndex(remoteFile, "/")
@@ -162,13 +162,13 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
 	if obj.ftpServerStateIsActive() == false {
 		Logger.Printf("sync %s failed can't connected ftp server", localFile)
 		obj.Sync(localFile, remoteFile, numberTimes+1)
-		return
+		return false
 	}
 
 	reader, err := os.Open(localFile)
 	if err != nil {
 		Logger.Printf("open %s failed %v", localFile, err)
-		return
+		return false
 	}
 	defer reader.Close()
 
@@ -176,10 +176,12 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) {
 	if err != nil {
 		Logger.Printf("sync %s failed %v", localFile, err)
 		obj.Sync(localFile, remoteFile, numberTimes+1)
-		return
+		return false
 	}
 
 	Logger.Printf("sync %s to %s success", localFile, remoteFile)
+
+	return true
 }
 
 func (obj *SyncFtp) Sync(localFile, remoteFile string, numberTimes int) bool {

@@ -14,8 +14,38 @@ v0.0.4
 ./bin/goRedisFtpSync --config=config.xml
 
 ./redis-cli -p 8399
+127.0.0.1:8399> files /
+1) "/1.php"
+2) "/test"
+3) "/web"
 127.0.0.1:8399> ftpsync /data/nice.gif /web/images/hello.gif
 OK
+127.0.0.1:8399> ftpasync /data/nice.gif /web/images/hello.gif
+OK
+127.0.0.1:8399> files / 1
+1) "/1.php"
+2) "/test"
+3) "/test/php"
+4) "/test/php/online"
+5) "/test/php/online/test.php"
+6) "/web"
+7) "/web/images"
+8) "/web/images/hello.gif"
+9) "/web/index.log"
+127.0.0.1:8399> delete /1.php
+(integer) 1
+127.0.0.1:8399> files /
+1) "/test"
+2) "/web"
+127.0.0.1:8399> files / 1
+1) "/test"
+2) "/test/php"
+3) "/test/php/online"
+4) "/test/php/online/test.php"
+5) "/web"
+6) "/web/images"
+7) "/web/images/hello.gif"
+8) "/web/index.log"
 127.0.0.1:8399>
 ```
 
@@ -23,9 +53,10 @@ OK
 ```
 ping {message}
 ftpsync {local file} {remote file}
-files {remote folder}
+ftpasync {local file} {remote file}
+files {remote folder} {recursion default 0}
 exists {remote file}
-delete {remote file}
+delete {remote file}  {async default 0}
 ```
 
 ### config

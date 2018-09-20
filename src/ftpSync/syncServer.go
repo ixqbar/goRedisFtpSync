@@ -37,12 +37,24 @@ func (obj *ftpSyncRedisHandler) Ping(message string) (string, error) {
 	return "PONG", nil
 }
 
-func (obj *ftpSyncRedisHandler) FtpSync(localFile, remoteFile string) error {
+func (obj *ftpSyncRedisHandler) FtpAsync(localFile, remoteFile string) error {
 	if len(localFile) == 0 || len(remoteFile) == 0 || strings.HasSuffix(remoteFile, "/") {
 		return errors.New("error params")
 	}
 
 	if GSyncFtp.Sync(localFile, remoteFile, 1) {
+		return nil
+	}
+
+	return errors.New("sync fail")
+}
+
+func (obj *ftpSyncRedisHandler) FtpSync(localFile, remoteFile string) error {
+	if len(localFile) == 0 || len(remoteFile) == 0 || strings.HasSuffix(remoteFile, "/") {
+		return errors.New("error params")
+	}
+
+	if GSyncFtp.Put(localFile, remoteFile, 1) {
 		return nil
 	}
 
