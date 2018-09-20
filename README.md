@@ -59,6 +59,8 @@ $redis_handle->rawCommand('ftpsync', '/data/nice.gif', '/web/images/hello.gif');
 $result = $redis_handle->rawCommand('files', '/web');
 //删除
 $redis_handle->rawCommand('delete', '/web/images/hello.gif');
+//是否存在
+$redis_handle->rawCommand('exists', '/web/images/hello.gif');
 ```
 
 ### deps
