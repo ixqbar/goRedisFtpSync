@@ -42,7 +42,7 @@ func (obj *ftpSyncRedisHandler) FtpAsync(localFile, remoteFile string) error {
 		return errors.New("error params")
 	}
 
-	if GSyncFtp.Sync(localFile, remoteFile, 1) {
+	if GSyncFtp.Async(localFile, remoteFile, 1) {
 		return nil
 	}
 

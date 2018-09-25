@@ -61,6 +61,7 @@ func (obj *SyncFtp) Init() {
 			case <-checkInterval.C:
 				obj.Refresh()
 			case syncFile := <-obj.syncFileChannel:
+				Logger.Printf("got sync channel file %v", syncFile)
 				obj.Put(syncFile.LocalFile, syncFile.RemoteFile, syncFile.NumberTimes)
 			case <-obj.syncStopChannel:
 				Logger.Print("syncFtp catch stop signal")
@@ -161,7 +162,7 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 
 	if obj.ftpServerStateIsActive() == false {
 		Logger.Printf("sync %s failed can't connected ftp server", localFile)
-		obj.Sync(localFile, remoteFile, numberTimes+1)
+		obj.Async(localFile, remoteFile, numberTimes+1)
 		return false
 	}
 
@@ -175,7 +176,7 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 	err = obj.syncFtpServer.Stor(remoteFile, reader)
 	if err != nil {
 		Logger.Printf("sync %s failed %v", localFile, err)
-		obj.Sync(localFile, remoteFile, numberTimes+1)
+		obj.Async(localFile, remoteFile, numberTimes+1)
 		return false
 	}
 
@@ -184,14 +185,16 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 	return true
 }
 
-func (obj *SyncFtp) Sync(localFile, remoteFile string, numberTimes int) bool {
+func (obj *SyncFtp) Async(localFile, remoteFile string, numberTimes int) bool {
 	if numberTimes > 3 {
 		Logger.Printf("sync %s to %s overflow max num", localFile, remoteFile)
 		return false
 	}
 
 	if obj.syncFtpServer != nil {
-		obj.syncFileChannel <- NewSyncFileInfo(localFile, remoteFile, numberTimes)
+		go func() {
+			obj.syncFileChannel <- NewSyncFileInfo(localFile, remoteFile, numberTimes)
+		}()
 		return true
 	}
 
