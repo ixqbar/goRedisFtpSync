@@ -36,7 +36,7 @@ type SyncFtp struct {
 func (obj *SyncFtp) Init() {
 	obj.syncFtpServer = nil
 	obj.allRemoteFolder = make(map[string]bool, 0)
-	obj.syncFileChannel = make(chan *SyncFileInfo, 10)
+	obj.syncFileChannel = make(chan *SyncFileInfo, 1000)
 	obj.syncStopChannel = make(chan bool, 0)
 
 	obj.Refresh()
@@ -78,6 +78,8 @@ func (obj *SyncFtp) Init() {
 				break F
 			}
 		}
+
+	obj.syncStopChannel <- true
 	}()
 }
 
@@ -124,36 +126,45 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 	obj.Lock()
 	defer obj.Unlock()
 
-	oldRemoteFile := remoteFile
+	tmpRemoteFile := remoteFile
 
-	if strings.HasPrefix(remoteFile, "/") {
-		remoteFile = remoteFile[1:]
+	if strings.HasPrefix(tmpRemoteFile, "/") {
+		tmpRemoteFile = tmpRemoteFile[1:]
 	}
 
-	if len(remoteFile) > 0 && strings.HasSuffix(remoteFile, "/") {
-		remoteFile = remoteFile[:len(remoteFile)-1]
+	if len(tmpRemoteFile) > 0 && strings.HasSuffix(tmpRemoteFile, "/") {
+		tmpRemoteFile = tmpRemoteFile[:len(tmpRemoteFile)-1]
 	}
 
-	if len(remoteFile) == 0 {
-		Logger.Printf("sync remote file %s failed", oldRemoteFile)
+	if len(tmpRemoteFile) == 0 {
+		Logger.Printf("sync remote file %s failed", remoteFile)
 		return false
 	}
 
-	position := strings.LastIndex(remoteFile, "/")
+	position := strings.LastIndex(tmpRemoteFile, "/")
 	if position >= 0 {
-		remoteFileFolder := remoteFile[:position]
+		remoteFileFolder := tmpRemoteFile[:position]
 		if _, ok := obj.allRemoteFolder[remoteFileFolder]; ok == false || numberTimes > 1 {
-			remoteFileFolders := strings.Split(remoteFileFolder, "/")
-			tempRemoteFileFolder := "/"
-			for _, f := range remoteFileFolders {
-				tempRemoteFileFolder = path.Join(tempRemoteFileFolder, f)
-				if _, ok := obj.allRemoteFolder[tempRemoteFileFolder]; ok == false || numberTimes > 1 {
-					err := obj.syncFtpServer.MakeDir(tempRemoteFileFolder)
-					if err == nil {
-						obj.allRemoteFolder[tempRemoteFileFolder] = true
-						Logger.Printf("mkdir %s success", tempRemoteFileFolder)
-					} else {
-						Logger.Printf("mkdir %s failed %v", tempRemoteFileFolder, err)
+			parentPath := path.Join("/", remoteFileFolder)
+			err := obj.syncFtpServer.ChangeDir(parentPath)
+			if err == nil {
+				obj.allRemoteFolder[parentPath] = true
+			} else {
+				remoteFileFolders := strings.Split(remoteFileFolder, "/")
+				tempRemoteFileFolder := "/"
+				for _, f := range remoteFileFolders {
+					tempRemoteFileFolder = path.Join(tempRemoteFileFolder, f)
+					if _, ok := obj.allRemoteFolder[tempRemoteFileFolder]; ok == false || numberTimes > 1 {
+						err := obj.syncFtpServer.MakeDir(tempRemoteFileFolder)
+						if err == nil {
+							obj.allRemoteFolder[tempRemoteFileFolder] = true
+							Logger.Printf("mkdir %s success", tempRemoteFileFolder)
+						} else {
+							if strings.Contains(err.Error(), "File exists") {
+								obj.allRemoteFolder[tempRemoteFileFolder] = true
+							}
+							Logger.Printf("mkdir %s failed %v", tempRemoteFileFolder, err)
+						}
 					}
 				}
 			}
@@ -161,7 +172,7 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 	}
 
 	if obj.ftpServerStateIsActive() == false {
-		Logger.Printf("sync %s failed can't connected ftp server", localFile)
+		Logger.Printf("sync %s to %s failed can't connected ftp server", localFile, remoteFile)
 		obj.Async(localFile, remoteFile, numberTimes+1)
 		return false
 	}
@@ -175,7 +186,7 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 
 	err = obj.syncFtpServer.Stor(remoteFile, reader)
 	if err != nil {
-		Logger.Printf("sync %s failed %v", localFile, err)
+		Logger.Printf("sync %s to %s failed %v", localFile, remoteFile, err)
 		obj.Async(localFile, remoteFile, numberTimes+1)
 		return false
 	}
@@ -288,6 +299,8 @@ func (obj *SyncFtp) ExistsFile(remoteFile string) bool {
 
 func (obj *SyncFtp) Stop() {
 	obj.syncStopChannel <- true
+	<- obj.syncStopChannel
+	Logger.Print("syncFtp stopped")
 }
 
 var GSyncFtp = &SyncFtp{}
