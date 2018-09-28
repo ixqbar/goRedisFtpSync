@@ -199,15 +199,16 @@ func (obj *SyncFtp) tryDisconnectedFtpServer() {
 		obj.syncFtpServer.Quit()
 		obj.syncFtpServer = nil
 		obj.doDependClearAction()
-	}
 
-	allRemoteFolders := []string{}
-	for k, _ := range obj.allRemoteFolder {
-		allRemoteFolders = append(allRemoteFolders, k)
+		obj.allRemoteFolder = make(map[string]bool, 0)
+	} else {
+		allRemoteFolders := []string{}
+		for k, _ := range obj.allRemoteFolder {
+			allRemoteFolders = append(allRemoteFolders, k)
+		}
+		sort.Strings(allRemoteFolders)
+		Logger.Printf("current cached ftp server folders %v", allRemoteFolders)
 	}
-
-	sort.Strings(allRemoteFolders)
-	Logger.Printf("current load ftp server folders %v", allRemoteFolders)
 }
 
 func (obj *SyncFtp) Refresh() bool {
