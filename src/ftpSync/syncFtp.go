@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -136,7 +137,7 @@ func (obj *SyncFtp) doDependClearAction() {
 		return
 	}
 
-	err := obj.dependProcess.Kill()
+	err := obj.dependProcess.Signal(syscall.SIGTERM)
 	if err != nil {
 		Logger.Print(err)
 	}
