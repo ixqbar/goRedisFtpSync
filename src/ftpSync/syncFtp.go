@@ -45,7 +45,7 @@ func (obj *SyncFtp) Init() {
 	obj.allRemoteFolder = make(map[string]bool, 0)
 	obj.syncFileChannel = make(chan *SyncFileInfo, 1000)
 	obj.syncStopChannel = make(chan bool, 0)
-	obj.activeDeadline = time.Now().Add(time.Minute * DEPEND_PROCESS_TIMEOUT_MINUTE)
+	obj.activeDeadline = time.Now().Add(time.Second * DEPEND_PROCESS_TIMEOUT_SECONDS)
 
 	go func() {
 		checkInterval := time.NewTicker(time.Second * CHECK_FTP_CONNECTION_STATE_INTERVAL_SECONDS)
@@ -129,7 +129,15 @@ func (obj *SyncFtp) doDependReadyAction() {
 	}
 
 	obj.dependProcess = p
-	Logger.Printf("start depend process success pid=%d", command.Process.Pid)
+
+	go func() {
+		pid := obj.dependProcess.Pid
+		Logger.Printf("wait depend process pid=%d", pid)
+		obj.dependProcess.Wait()
+		Logger.Printf("wait depend process pid=%d success", pid)
+	}()
+
+	Logger.Printf("start depend process success pid=%d", obj.dependProcess.Pid)
 }
 
 func (obj *SyncFtp) doDependClearAction() {
@@ -137,25 +145,36 @@ func (obj *SyncFtp) doDependClearAction() {
 		return
 	}
 
+	pid := obj.dependProcess.Pid
 	err := obj.dependProcess.Signal(syscall.SIGTERM)
 	if err != nil {
 		Logger.Print(err)
 	}
 	obj.dependProcess = nil
 
-	Logger.Printf("depent process exit")
+	Logger.Printf("kill depent process pid=%d", pid)
+}
+
+func (obj *SyncFtp) disConnectedFtpServer() {
+	if obj.syncFtpServer == nil {
+		return
+	}
+
+	obj.syncFtpServer.Logout()
+	obj.syncFtpServer.Quit()
+	obj.syncFtpServer = nil
 }
 
 func (obj *SyncFtp) ftpServerStateIsActive() bool {
 	if obj.syncFtpServer != nil {
 		err := obj.syncFtpServer.NoOp()
 		if err == nil {
-			obj.activeDeadline = time.Now().Add(time.Minute * DEPEND_PROCESS_TIMEOUT_MINUTE)
+			obj.activeDeadline = time.Now().Add(time.Second * DEPEND_PROCESS_TIMEOUT_SECONDS)
 			Logger.Printf("ftp server deadline %s", obj.activeDeadline.Format(time.RFC3339))
 			return true
 		} else {
 			Logger.Print(err)
-			obj.syncFtpServer = nil
+			obj.disConnectedFtpServer()
 		}
 	}
 
@@ -179,7 +198,7 @@ func (obj *SyncFtp) ftpServerStateIsActive() bool {
 		}
 
 		obj.syncFtpServer = fs
-		obj.activeDeadline = time.Now().Add(time.Minute * DEPEND_PROCESS_TIMEOUT_MINUTE)
+		obj.activeDeadline = time.Now().Add(time.Second * DEPEND_PROCESS_TIMEOUT_SECONDS)
 
 		Logger.Printf("connect ftp server %s success deadline %s", GConfig.FtpServerAddress, obj.activeDeadline.Format(time.RFC3339))
 		return true
@@ -196,9 +215,7 @@ func (obj *SyncFtp) tryDisconnectedFtpServer() {
 	if obj.syncFtpServer != nil && obj.activeDeadline.Before(time.Now()) {
 		Logger.Printf("overflow max timeout to disconnect ftp server")
 
-		obj.syncFtpServer.Logout()
-		obj.syncFtpServer.Quit()
-		obj.syncFtpServer = nil
+		obj.disConnectedFtpServer()
 		obj.doDependClearAction()
 
 		obj.allRemoteFolder = make(map[string]bool, 0)
@@ -327,7 +344,6 @@ func (obj *SyncFtp) ListFiles(remoteFolder string, recursion int) ([]string, err
 func (obj *SyncFtp) listFtpServerFolder(p string, recursion int) []string {
 	fileEntryList, err := obj.syncFtpServer.List(p)
 	if err != nil {
-		obj.syncFtpServer = nil
 		Logger.Print(err)
 		return nil
 	}
