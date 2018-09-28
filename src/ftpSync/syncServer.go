@@ -16,6 +16,13 @@ type ftpSyncRedisHandler struct {
 func (obj *ftpSyncRedisHandler) Init() error {
 	obj.Initiation(func() {
 		GSyncFtp.Init()
+
+		obj.RegisterClientStateChangedFunc(func(client *redis.Client, state int) {
+			switch state {
+			case redis.CLIENT_STATE_IS_CONNECTED:
+				GSyncFtp.Refresh()
+			}
+		})
 	})
 
 	return nil
@@ -42,7 +49,7 @@ func (obj *ftpSyncRedisHandler) FtpAsync(localFile, remoteFile string) error {
 		return errors.New("error params")
 	}
 
-	if GSyncFtp.Async(localFile, remoteFile, 1) {
+	if GSyncFtp.Async(localFile, remoteFile, 1, 0) {
 		return nil
 	}
 

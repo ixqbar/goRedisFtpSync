@@ -6,4 +6,5 @@
         <user>anonymous</user>
         <password>anonymous</password>
     </ftp>
+    <depend_command></depend_command>
 </config>

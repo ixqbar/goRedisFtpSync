@@ -12,6 +12,7 @@ type TConfig struct {
 	FtpServerAddress  string `xml:"ftp>address"`
 	FtpServerUser     string `xml:"ftp>user"`
 	FtpServerPassword string `xml:"ftp>password"`
+	DependCommand     string `xml:"depend_command"`
 }
 
 var GConfig *TConfig

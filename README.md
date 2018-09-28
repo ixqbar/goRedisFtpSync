@@ -6,7 +6,7 @@
 
 ### version
 ```
-v0.0.6
+v0.0.7
 ```
 
 ### usage
@@ -69,6 +69,7 @@ delete {remote file}  {async default 0}
         <user>anonymous</user>
         <password>anonymous</password>
     </ftp>
+    <depend_command></depend_command>
 </config>
 ```
 

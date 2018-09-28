@@ -3,9 +3,11 @@ package ftpSync
 import (
 	"errors"
 	"github.com/jlaffaye/ftp"
+	"io"
 	"os"
+	"os/exec"
 	"path"
-	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -31,18 +33,21 @@ type SyncFtp struct {
 	syncStopChannel chan bool
 	allRemoteFolder map[string]bool
 	syncFtpServer   *ftp.ServerConn
+	activeDeadline  time.Time
+	dependProcess   *os.Process
 }
 
 func (obj *SyncFtp) Init() {
 	obj.syncFtpServer = nil
+	obj.dependProcess = nil
+
 	obj.allRemoteFolder = make(map[string]bool, 0)
 	obj.syncFileChannel = make(chan *SyncFileInfo, 1000)
 	obj.syncStopChannel = make(chan bool, 0)
-
-	obj.Refresh()
+	obj.activeDeadline = time.Now().Add(time.Minute * DEPEND_PROCESS_TIMEOUT_MINUTE)
 
 	go func() {
-		checkInterval := time.NewTicker(time.Second * time.Duration(10))
+		checkInterval := time.NewTicker(time.Second * CHECK_FTP_CONNECTION_STATE_INTERVAL_SECONDS)
 		defer func() {
 			Logger.Print("syncFtp will stop")
 			checkInterval.Stop()
@@ -59,7 +64,7 @@ func (obj *SyncFtp) Init() {
 		for {
 			select {
 			case <-checkInterval.C:
-				obj.Refresh()
+				obj.tryDisconnectedFtpServer()
 			case syncFile := <-obj.syncFileChannel:
 				Logger.Printf("got sync channel file %v", syncFile)
 				obj.Put(syncFile.LocalFile, syncFile.RemoteFile, syncFile.NumberTimes)
@@ -79,52 +84,155 @@ func (obj *SyncFtp) Init() {
 			}
 		}
 
-	obj.syncStopChannel <- true
+		obj.syncStopChannel <- true
 	}()
+}
+
+func (obj *SyncFtp) doDependReadyAction() {
+	if len(GConfig.DependCommand) == 0 {
+		return
+	}
+
+	if obj.dependProcess != nil {
+		_, err := os.FindProcess(obj.dependProcess.Pid)
+		if err != nil {
+			Logger.Print(err)
+			obj.dependProcess = nil
+		} else {
+			Logger.Printf("depend process pid=%d already exists", obj.dependProcess.Pid)
+			return
+		}
+	}
+
+	command := exec.Command(GConfig.DependCommand)
+	stderr, err := command.StderrPipe()
+	if err == nil {
+		go io.Copy(NewLogWriter("depend_process_stderr"), stderr)
+	}
+
+	stdout, err := command.StdoutPipe()
+	if err == nil {
+		go io.Copy(NewLogWriter("depend_process_stdout"), stdout)
+	}
+
+	err = command.Start()
+	if err != nil {
+		Logger.Print(err)
+		return
+	}
+
+	p, err := os.FindProcess(command.Process.Pid)
+	if err != nil {
+		Logger.Print(err)
+		return
+	}
+
+	obj.dependProcess = p
+	Logger.Printf("start depend process success pid=%d", command.Process.Pid)
+}
+
+func (obj *SyncFtp) doDependClearAction() {
+	if obj.dependProcess == nil {
+		return
+	}
+
+	err := obj.dependProcess.Kill()
+	if err != nil {
+		Logger.Print(err)
+	}
+	obj.dependProcess = nil
+
+	Logger.Printf("depent process exit")
 }
 
 func (obj *SyncFtp) ftpServerStateIsActive() bool {
 	if obj.syncFtpServer != nil {
 		err := obj.syncFtpServer.NoOp()
 		if err == nil {
+			obj.activeDeadline = time.Now().Add(time.Minute * DEPEND_PROCESS_TIMEOUT_MINUTE)
+			Logger.Printf("ftp server deadline %s", obj.activeDeadline.Format(time.RFC3339))
 			return true
 		} else {
-			obj.syncFtpServer = nil
 			Logger.Print(err)
+			obj.syncFtpServer = nil
 		}
 	}
 
-	fs, err := ftp.DialTimeout(GConfig.FtpServerAddress, time.Second*10)
-	if err != nil {
-		Logger.Printf("ftp server %s connect failed %v", GConfig.FtpServerAddress, err)
-		return false
+	obj.doDependReadyAction()
+
+	loop := 0
+	for loop < TRY_CONNECT_FTP_SERVER_MAX_NUM {
+		loop = loop + 1
+		fs, err := ftp.DialTimeout(GConfig.FtpServerAddress, time.Second*5)
+		if err != nil {
+			Logger.Printf("connect ftp server %s failed %v", GConfig.FtpServerAddress, err)
+			time.Sleep(time.Second * 2)
+			continue
+		}
+
+		err = fs.Login(GConfig.FtpServerUser, GConfig.FtpServerPassword)
+		if err != nil {
+			Logger.Printf("login ftp server %s failed %v", GConfig.FtpServerAddress, err)
+			Logger.Println(err)
+			return false
+		}
+
+		obj.syncFtpServer = fs
+		obj.activeDeadline = time.Now().Add(time.Minute * DEPEND_PROCESS_TIMEOUT_MINUTE)
+
+		Logger.Printf("connect ftp server %s success deadline %s", GConfig.FtpServerAddress, obj.activeDeadline.Format(time.RFC3339))
+		return true
 	}
 
-	err = fs.Login(GConfig.FtpServerUser, GConfig.FtpServerPassword)
-	if err != nil {
-		Logger.Printf("ftp server %s login failed %v", GConfig.FtpServerAddress, err)
-		Logger.Println(err)
-		return false
-	}
-
-	obj.syncFtpServer = fs
-
-	Logger.Printf("ftp server %s connect success", GConfig.FtpServerAddress)
-
-	return true
+	Logger.Printf("connect ftp server %s failed", GConfig.FtpServerAddress)
+	return false
 }
 
-func (obj *SyncFtp) Refresh() {
+func (obj *SyncFtp) tryDisconnectedFtpServer() {
 	obj.Lock()
 	defer obj.Unlock()
 
-	obj.ftpServerStateIsActive()
-	Logger.Printf("current load ftp server folders %v", reflect.ValueOf(obj.allRemoteFolder).MapKeys())
+	if obj.syncFtpServer != nil && obj.activeDeadline.Before(time.Now()) {
+		Logger.Printf("overflow max timeout to disconnect ftp server")
+
+		obj.syncFtpServer.Logout()
+		obj.syncFtpServer.Quit()
+		obj.syncFtpServer = nil
+		obj.doDependClearAction()
+	}
+
+	allRemoteFolders := []string{}
+	for k, _ := range obj.allRemoteFolder {
+		allRemoteFolders = append(allRemoteFolders, k)
+	}
+
+	sort.Strings(allRemoteFolders)
+	Logger.Printf("current load ftp server folders %v", allRemoteFolders)
+}
+
+func (obj *SyncFtp) Refresh() bool {
+	obj.Lock()
+	defer obj.Unlock()
+
+	return obj.ftpServerStateIsActive()
 }
 
 func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 	obj.Lock()
 	defer obj.Unlock()
+
+	reader, err := os.Open(localFile)
+	if err != nil {
+		Logger.Printf("open %s failed %v", localFile, err)
+		return false
+	}
+	defer reader.Close()
+
+	if obj.ftpServerStateIsActive() == false {
+		Logger.Printf("sync %s to %s failed can't connected ftp server", localFile, remoteFile)
+		obj.Async(localFile, remoteFile, numberTimes, SYNC_TO_FTP_AGAINT_LATER_SECONDS)
+		return false
+	}
 
 	tmpRemoteFile := remoteFile
 
@@ -171,23 +279,10 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 		}
 	}
 
-	if obj.ftpServerStateIsActive() == false {
-		Logger.Printf("sync %s to %s failed can't connected ftp server", localFile, remoteFile)
-		obj.Async(localFile, remoteFile, numberTimes+1)
-		return false
-	}
-
-	reader, err := os.Open(localFile)
-	if err != nil {
-		Logger.Printf("open %s failed %v", localFile, err)
-		return false
-	}
-	defer reader.Close()
-
 	err = obj.syncFtpServer.Stor(remoteFile, reader)
 	if err != nil {
 		Logger.Printf("sync %s to %s failed %v", localFile, remoteFile, err)
-		obj.Async(localFile, remoteFile, numberTimes+1)
+		obj.Async(localFile, remoteFile, numberTimes+1, 0)
 		return false
 	}
 
@@ -196,20 +291,20 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 	return true
 }
 
-func (obj *SyncFtp) Async(localFile, remoteFile string, numberTimes int) bool {
-	if numberTimes > 3 {
+func (obj *SyncFtp) Async(localFile, remoteFile string, numberTimes int, waitSeconds int) bool {
+	if numberTimes > SYNC_TO_FTP_MAX_NUM {
 		Logger.Printf("sync %s to %s overflow max num", localFile, remoteFile)
 		return false
 	}
 
-	if obj.syncFtpServer != nil {
-		go func() {
-			obj.syncFileChannel <- NewSyncFileInfo(localFile, remoteFile, numberTimes)
-		}()
-		return true
-	}
+	go func() {
+		if waitSeconds > 0 {
+			time.Sleep(time.Duration(waitSeconds) * time.Second)
+		}
+		obj.syncFileChannel <- NewSyncFileInfo(localFile, remoteFile, numberTimes)
+	}()
 
-	return false
+	return true
 }
 
 func (obj *SyncFtp) ListFiles(remoteFolder string, recursion int) ([]string, error) {
@@ -299,7 +394,8 @@ func (obj *SyncFtp) ExistsFile(remoteFile string) bool {
 
 func (obj *SyncFtp) Stop() {
 	obj.syncStopChannel <- true
-	<- obj.syncStopChannel
+	<-obj.syncStopChannel
+	obj.doDependClearAction()
 	Logger.Print("syncFtp stopped")
 }
 
