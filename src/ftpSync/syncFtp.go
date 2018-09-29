@@ -65,7 +65,7 @@ func (obj *SyncFtp) Init() {
 		for {
 			select {
 			case <-checkInterval.C:
-				obj.tryDisconnectedFtpServer()
+				obj.tryCloseConnectedFtpServer()
 			case syncFile := <-obj.syncFileChannel:
 				Logger.Printf("got sync channel file %v", syncFile)
 				obj.Put(syncFile.LocalFile, syncFile.RemoteFile, syncFile.NumberTimes)
@@ -155,7 +155,7 @@ func (obj *SyncFtp) doDependClearAction() {
 	Logger.Printf("kill depent process pid=%d", pid)
 }
 
-func (obj *SyncFtp) disConnectedFtpServer() {
+func (obj *SyncFtp) closeConnectedFtpServer() {
 	if obj.syncFtpServer == nil {
 		return
 	}
@@ -174,7 +174,7 @@ func (obj *SyncFtp) ftpServerStateIsActive() bool {
 			return true
 		} else {
 			Logger.Print(err)
-			obj.disConnectedFtpServer()
+			obj.closeConnectedFtpServer()
 		}
 	}
 
@@ -208,14 +208,14 @@ func (obj *SyncFtp) ftpServerStateIsActive() bool {
 	return false
 }
 
-func (obj *SyncFtp) tryDisconnectedFtpServer() {
+func (obj *SyncFtp) tryCloseConnectedFtpServer() {
 	obj.Lock()
 	defer obj.Unlock()
 
 	if obj.syncFtpServer != nil && obj.activeDeadline.Before(time.Now()) {
 		Logger.Printf("overflow max timeout to disconnect ftp server")
 
-		obj.disConnectedFtpServer()
+		obj.closeConnectedFtpServer()
 		obj.doDependClearAction()
 
 		obj.allRemoteFolder = make(map[string]bool, 0)
@@ -413,6 +413,7 @@ func (obj *SyncFtp) ExistsFile(remoteFile string) bool {
 func (obj *SyncFtp) Stop() {
 	obj.syncStopChannel <- true
 	<-obj.syncStopChannel
+	obj.closeConnectedFtpServer()
 	obj.doDependClearAction()
 	Logger.Print("syncFtp stopped")
 }
