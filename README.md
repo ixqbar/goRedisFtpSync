@@ -6,7 +6,7 @@
 
 ### version
 ```
-v0.0.7
+v0.0.8
 ```
 
 ### usage
@@ -97,7 +97,7 @@ $redis_handle->rawCommand('exists', '/web/images/hello.gif');
 
 ### deps
 * https://github.com/jonnywang/go-kits/redis
-* https://github.com/jlaffaye/ftp
+* https://github.com/jonnywang/ftp
 
 ### faq
 * qq群 233415606

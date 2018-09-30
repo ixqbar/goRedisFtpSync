@@ -2,7 +2,7 @@ package ftpSync
 
 import (
 	"errors"
-	"github.com/jlaffaye/ftp"
+	"github.com/jonnywang/ftp"
 	"io"
 	"os"
 	"os/exec"
@@ -79,6 +79,7 @@ func (obj *SyncFtp) Init() {
 		for {
 			select {
 			case syncFile := <-obj.syncFileChannel:
+				Logger.Printf("got sync channel file %v", syncFile)
 				obj.Put(syncFile.LocalFile, syncFile.RemoteFile, syncFile.NumberTimes)
 			default:
 				break F
@@ -134,6 +135,8 @@ func (obj *SyncFtp) doDependReadyAction() {
 		pid := obj.dependProcess.Pid
 		Logger.Printf("wait depend process pid=%d", pid)
 		obj.dependProcess.Wait()
+		obj.dependProcess = nil
+		obj.syncFtpServer = nil
 		Logger.Printf("wait depend process pid=%d success", pid)
 	}()
 
@@ -190,6 +193,8 @@ func (obj *SyncFtp) ftpServerStateIsActive() bool {
 			continue
 		}
 
+		fs.SetOpsTimeout(time.Second * SYNC_TO_FTP_READ_WRITE_TIMEOUT_SECONDS)
+
 		err = fs.Login(GConfig.FtpServerUser, GConfig.FtpServerPassword)
 		if err != nil {
 			Logger.Printf("login ftp server %s failed %v", GConfig.FtpServerAddress, err)
@@ -239,6 +244,8 @@ func (obj *SyncFtp) Refresh() bool {
 func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 	obj.Lock()
 	defer obj.Unlock()
+
+	Logger.Printf("ready to put %s to %s success", localFile, remoteFile)
 
 	reader, err := os.Open(localFile)
 	if err != nil {
@@ -297,6 +304,8 @@ func (obj *SyncFtp) Put(localFile, remoteFile string, numberTimes int) bool {
 			}
 		}
 	}
+
+	Logger.Printf("start sync %s to %s", localFile, remoteFile)
 
 	err = obj.syncFtpServer.Stor(remoteFile, reader)
 	if err != nil {
