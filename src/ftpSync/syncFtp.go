@@ -31,7 +31,7 @@ func NewSyncFileInfo(localFile, remoteFile string, numberTimes int) *SyncFileInf
 type SyncFtp struct {
 	sync.Mutex
 	syncFileChannel chan *SyncFileInfo
-	syncStopChannel chan bool
+	syncStopChannel chan int
 	allRemoteFolder map[string]bool
 	syncFtpServer   *ftp.ServerConn
 	activeDeadline  time.Time
@@ -44,7 +44,7 @@ func (obj *SyncFtp) Init() {
 
 	obj.allRemoteFolder = make(map[string]bool, 0)
 	obj.syncFileChannel = make(chan *SyncFileInfo, 1000)
-	obj.syncStopChannel = make(chan bool, 0)
+	obj.syncStopChannel = make(chan int, 0)
 	obj.activeDeadline = time.Now().Add(time.Second * DEPEND_PROCESS_TIMEOUT_SECONDS)
 
 	go func() {
@@ -52,13 +52,14 @@ func (obj *SyncFtp) Init() {
 		defer func() {
 			Logger.Print("syncFtp will stop")
 			checkInterval.Stop()
-			close(obj.syncStopChannel)
 			close(obj.syncFileChannel)
 
 			if obj.syncFtpServer != nil {
 				obj.syncFtpServer.Logout()
 				obj.syncFtpServer.Quit()
 			}
+
+			obj.syncStopChannel <- 1
 		}()
 
 	E:
@@ -85,8 +86,6 @@ func (obj *SyncFtp) Init() {
 				break F
 			}
 		}
-
-		obj.syncStopChannel <- true
 	}()
 }
 
@@ -420,8 +419,23 @@ func (obj *SyncFtp) ExistsFile(remoteFile string) bool {
 }
 
 func (obj *SyncFtp) Stop() {
-	obj.syncStopChannel <- true
-	<-obj.syncStopChannel
+S:
+	obj.syncStopChannel <- 0
+
+	for {
+		n, ok := <-obj.syncStopChannel
+		if !ok {
+			break
+		}
+
+		if n > 0 {
+			break
+		} else {
+			goto S
+		}
+	}
+
+	close(obj.syncStopChannel)
 	obj.closeConnectedFtpServer()
 	obj.doDependClearAction()
 	Logger.Print("syncFtp stopped")

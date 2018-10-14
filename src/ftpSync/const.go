@@ -1,6 +1,6 @@
 package ftpSync
 
-const VERSION = "0.0.8"
+const VERSION = "0.0.9"
 const TRY_CONNECT_FTP_SERVER_MAX_NUM = 3
 const DEPEND_PROCESS_TIMEOUT_SECONDS = 30
 const SYNC_TO_FTP_MAX_NUM = 3
