@@ -72,6 +72,7 @@ delete {remote file}  {async default 0}
     <depend_command></depend_command>
 </config>
 ```
+* depend_command 用于启动ftp依赖的其他服务，比如vpn等等，没有依赖则留空
 
 ### screenshot
 ![](screenshot/ex_1.png)
